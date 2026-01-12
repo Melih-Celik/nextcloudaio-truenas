@@ -143,23 +143,22 @@ show_what_will_be_deleted() {
     echo "  🐳 Docker Containers:"
     echo "     - nextcloud-aio-mastercontainer"
     echo "     - nextcloud-aio-* (tüm AIO konteynerleri)"
-    echo "     - nginx-proxy-manager"
+    echo "     - nginx-proxy-manager (kurulduysa)"
     echo ""
     echo "  📦 Docker Volumes:"
     echo "     - nextcloud_aio_mastercontainer"
     echo "     - nextcloud_aio_* (tüm AIO volume'ları)"
-    echo "     - npm_data"
-    echo "     - npm_letsencrypt"
+    echo "     - npm_data, npm_letsencrypt (NPM kurulduysa)"
     echo ""
     echo "  🌐 Docker Networks:"
     echo "     - nextcloud-aio (AIO network)"
-    echo "     - npm_network"
+    echo "     - proxy_network"
     echo ""
     echo "  📁 Dosyalar:"
     echo "     - .env (yapılandırma dosyası)"
     echo ""
-    echo -e "  ${RED}⚠️  NFS mount ve TrueNAS verileri SİLİNMEYECEK${NC}"
-    echo -e "  ${GREEN}✅ /mnt/ncdata verileri korunacak${NC}"
+    echo -e "  ${CYAN}💾 VERİLER İÇİN:${NC}"
+    echo -e "  ${CYAN}   Mount edilen verileri silmek isteyip istemediğiniz sorulacak${NC}"
     echo ""
 }
 
@@ -200,10 +199,10 @@ final_confirmation() {
 stop_containers() {
     log_info "Konteynerler durduruluyor..."
     
-    # AIO durdur
+    # Tüm profilleri durdur
     cd "$SCRIPT_DIR"
-    docker compose -f docker-compose.yml down 2>/dev/null || true
-    docker compose -f docker-compose.npm.yml down 2>/dev/null || true
+    docker compose --profile npm down 2>/dev/null || true
+    docker compose down 2>/dev/null || true
     
     log_success "Compose servisleri durduruldu"
 }
@@ -256,9 +255,6 @@ remove_networks() {
     # AIO network
     docker network rm nextcloud-aio 2>/dev/null || true
     
-    # NPM network (eski)
-    docker network rm npm_network 2>/dev/null || true
-    
     log_success "Network'ler kaldırıldı"
 }
 
@@ -310,10 +306,63 @@ unmount_nfs() {
     log_info "NFS mount kontrol ediliyor..."
     
     if mount | grep -q "/mnt/ncdata"; then
-        read -p "NFS mount'u kaldırılsın mı? (e/h): " -n 1 -r
+        # Önce veri silme seçeneğini sor
+        echo ""
+        echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+        echo -e "${RED}                    ⚠️  VERİ SİLME SEÇENEĞİ  ⚠️                    ${NC}"
+        echo -e "${RED}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+        
+        # Mevcut veri boyutunu göster
+        if [[ -d /mnt/ncdata ]]; then
+            DATA_SIZE=$(du -sh /mnt/ncdata 2>/dev/null | awk '{print $1}' || echo "bilinmiyor")
+            DATA_FILES=$(find /mnt/ncdata -type f 2>/dev/null | wc -l || echo "bilinmiyor")
+            echo -e "  ${CYAN}Mount konumu:${NC} /mnt/ncdata"
+            echo -e "  ${CYAN}Toplam boyut:${NC} ${DATA_SIZE}"
+            echo -e "  ${CYAN}Dosya sayısı:${NC} ${DATA_FILES}"
+            echo ""
+        fi
+        
+        echo -e "  ${RED}DİKKAT: Bu işlem tüm Nextcloud verilerinizi silecek!${NC}"
+        echo -e "  ${RED}        Kullanıcı dosyaları, fotoğraflar, dokümanlar...${NC}"
+        echo -e "  ${RED}        BU İŞLEM GERİ ALINAMAZ!${NC}"
+        echo ""
+        
+        read -p "Mount edilen verileri de silmek istiyor musunuz? (e/h): " -n 1 -r DELETE_DATA
         echo
         
-        if [[ $REPLY =~ ^[Ee]$ ]]; then
+        if [[ $DELETE_DATA =~ ^[Ee]$ ]]; then
+            echo ""
+            echo -e "${RED}Son onay gerekli!${NC}"
+            echo -e "Tüm verileri silmek için '${MAGENTA}TÜM VERİLERİ SİL${NC}' yazın:"
+            read -p "> " CONFIRM_DELETE
+            
+            if [[ "$CONFIRM_DELETE" == "TÜM VERİLERİ SİL" ]]; then
+                log_warn "Veriler siliniyor..."
+                
+                # Önce NFS'i unmount et
+                umount /mnt/ncdata 2>/dev/null || true
+                
+                # Sonra dizini temizle (local olarak kalan varsa)
+                rm -rf /mnt/ncdata/* 2>/dev/null || true
+                
+                log_success "Veriler silindi"
+                DATA_DELETED=true
+            else
+                log_warn "Yanlış giriş - veriler KORUNDU"
+                DATA_DELETED=false
+            fi
+        else
+            log_info "Veriler korunacak"
+            DATA_DELETED=false
+        fi
+        
+        # NFS mount'ı kaldır
+        echo ""
+        read -p "NFS mount'ı kaldırılsın mı? (fstab'dan çıkarılır) (e/h): " -n 1 -r UNMOUNT_NFS
+        echo
+        
+        if [[ $UNMOUNT_NFS =~ ^[Ee]$ ]]; then
             umount /mnt/ncdata 2>/dev/null || true
             
             # fstab'dan kaldır
@@ -325,6 +374,28 @@ unmount_nfs() {
         fi
     else
         log_info "Aktif NFS mount bulunamadı"
+        
+        # Yine de /mnt/ncdata dizini varsa silmeyi sor
+        if [[ -d /mnt/ncdata ]] && [[ -n "$(ls -A /mnt/ncdata 2>/dev/null)" ]]; then
+            echo ""
+            DATA_SIZE=$(du -sh /mnt/ncdata 2>/dev/null | awk '{print $1}' || echo "bilinmiyor")
+            echo -e "${YELLOW}/mnt/ncdata dizininde veri bulundu (${DATA_SIZE})${NC}"
+            read -p "Bu verileri silmek istiyor musunuz? (e/h): " -n 1 -r DELETE_LOCAL
+            echo
+            
+            if [[ $DELETE_LOCAL =~ ^[Ee]$ ]]; then
+                echo -e "Silmek için '${MAGENTA}SİL${NC}' yazın:"
+                read -p "> " CONFIRM_LOCAL
+                
+                if [[ "$CONFIRM_LOCAL" == "SİL" ]]; then
+                    rm -rf /mnt/ncdata/* 2>/dev/null || true
+                    log_success "Yerel veriler silindi"
+                    DATA_DELETED=true
+                else
+                    log_warn "Veriler korundu"
+                fi
+            fi
+        fi
     fi
 }
 
@@ -340,13 +411,21 @@ print_summary() {
     echo ""
     echo "Kaldırılan öğeler:"
     echo "  ✅ Nextcloud AIO konteynerleri"
-    echo "  ✅ Nginx Proxy Manager"
+    echo "  ✅ Nginx Proxy Manager (kuruluysa)"
     echo "  ✅ Docker volume'ları"
     echo "  ✅ Docker network'leri"
     echo "  ✅ Yapılandırma dosyaları"
     echo ""
-    echo -e "${YELLOW}Korunan öğeler:${NC}"
-    echo "  📁 TrueNAS verileri (eğer NFS mount kaldırılmadıysa)"
+    
+    if [[ "$DATA_DELETED" == "true" ]]; then
+        echo -e "${RED}Silinen veriler:${NC}"
+        echo "  🗑️  /mnt/ncdata içeriği"
+        echo ""
+    else
+        echo -e "${YELLOW}Korunan öğeler:${NC}"
+        echo "  📁 /mnt/ncdata verileri"
+    fi
+    
     echo "  🐳 Docker kurulumu"
     echo ""
     echo -e "${BLUE}Yeniden kurmak için:${NC}"
@@ -359,6 +438,8 @@ print_summary() {
 #===============================================================================
 
 main() {
+    DATA_DELETED=false
+    
     check_root
     show_what_will_be_deleted
     dynamic_verification

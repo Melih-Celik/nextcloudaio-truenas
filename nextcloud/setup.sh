@@ -85,6 +85,15 @@ get_user_input() {
     echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
 
+    # NPM kurulacak mı?
+    echo -e "${CYAN}Nginx Proxy Manager (NPM) SSL/reverse proxy için kullanılır.${NC}"
+    echo -e "${CYAN}Zaten bir reverse proxy varsa (Traefik, Caddy vb.) kurmayın.${NC}"
+    read -p "NPM kurulsun mu? (e/h) [e]: " -n 1 -r INSTALL_NPM
+    echo
+    INSTALL_NPM=${INSTALL_NPM:-e}
+    
+    echo ""
+
     # Domain
     while true; do
         read -p "Nextcloud domain adı (örn: cloud.sirket.com): " DOMAIN
@@ -131,6 +140,11 @@ get_user_input() {
     echo "  NFS Path:      $NFS_PATH"
     echo "  Email:         $EMAIL"
     echo "  Timezone:      $TIMEZONE"
+    if [[ $INSTALL_NPM =~ ^[Ee]$ ]]; then
+        echo "  NPM:           ✅ Kurulacak"
+    else
+        echo "  NPM:           ❌ Kurulmayacak"
+    fi
     echo ""
     echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
@@ -360,10 +374,15 @@ EOF
 #===============================================================================
 
 start_npm() {
+    if [[ ! $INSTALL_NPM =~ ^[Ee]$ ]]; then
+        log_info "NPM kurulumu atlanıyor..."
+        return
+    fi
+
     log_info "Nginx Proxy Manager başlatılıyor..."
 
-    # NPM'i başlat (proxy_network oluşacak)
-    docker compose -f docker-compose.npm.yml up -d
+    # NPM'i profile ile başlat
+    docker compose --profile npm up -d nginx-proxy-manager
 
     # Network'ün oluştuğunu doğrula
     if docker network ls | grep -q "proxy_network"; then
@@ -387,7 +406,12 @@ start_nextcloud_aio() {
     # .env dosyasını yükle
     source .env
 
-    docker compose -f docker-compose.yml up -d
+    # AIO'yu başlat (NPM dahilse profile ile)
+    if [[ $INSTALL_NPM =~ ^[Ee]$ ]]; then
+        docker compose --profile npm up -d
+    else
+        docker compose up -d
+    fi
 
     log_success "Nextcloud AIO başlatıldı"
     echo ""
@@ -420,15 +444,24 @@ print_post_install() {
     echo "     ❌ OnlyOffice"
     echo "   - 'Start containers' tıkla"
     echo ""
-    echo "2. ${YELLOW}NPM Paneline git:${NC} http://${IP}:81"
-    echo "   - Giriş: admin@example.com / changeme"
-    echo "   - Şifreyi değiştir"
-    echo "   - Proxy Host ekle:"
-    echo "     Domain: ${DOMAIN}"
-    echo "     Forward: localhost:11000"
-    echo "     SSL: Let's Encrypt"
-    echo ""
-    echo "3. ${YELLOW}DNS ayarı:${NC}"
+    
+    if [[ $INSTALL_NPM =~ ^[Ee]$ ]]; then
+        echo "2. ${YELLOW}NPM Paneline git:${NC} http://${IP}:81"
+        echo "   - Giriş: admin@example.com / changeme"
+        echo "   - Şifreyi değiştir"
+        echo "   - Proxy Host ekle:"
+        echo "     Domain: ${DOMAIN}"
+        echo "     Forward: localhost:11000"
+        echo "     SSL: Let's Encrypt"
+        echo ""
+        echo "3. ${YELLOW}DNS ayarı:${NC}"
+    else
+        echo "2. ${YELLOW}Reverse Proxy ayarı:${NC}"
+        echo "   - Mevcut proxy'nizi ${IP}:11000 adresine yönlendirin"
+        echo "   - SSL sertifikası ayarlayın"
+        echo ""
+        echo "3. ${YELLOW}DNS ayarı:${NC}"
+    fi
     echo "   ${DOMAIN} -> ${IP} (A kaydı)"
     echo ""
     echo "4. ${YELLOW}Optimizasyonları uygula:${NC}"
@@ -461,9 +494,11 @@ main() {
     create_env_file
     start_npm
     
-    # NPM'in başlaması için bekle
-    log_info "NPM başlatılıyor, 10 saniye bekleniyor..."
-    sleep 10
+    # NPM kurulduysa bekle
+    if [[ $INSTALL_NPM =~ ^[Ee]$ ]]; then
+        log_info "NPM başlatılıyor, 10 saniye bekleniyor..."
+        sleep 10
+    fi
     
     start_nextcloud_aio
     

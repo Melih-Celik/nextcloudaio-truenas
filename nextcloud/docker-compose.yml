@@ -1,54 +1,75 @@
-# Nextcloud All-in-One Docker Compose
-# Resmi AIO kurulumu - https://github.com/nextcloud/all-in-one
+# Nextcloud AIO + Nginx Proxy Manager
+# Tek compose dosyası - profiles ile NPM opsiyonel
+#
+# Kullanım:
+#   Sadece AIO:     docker compose up -d
+#   AIO + NPM:      docker compose --profile npm up -d
+#
+# https://github.com/nextcloud/all-in-one
 
 services:
+  #=============================================================================
+  # Nginx Proxy Manager (Opsiyonel)
+  # --profile npm ile başlatılır
+  #=============================================================================
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: nginx-proxy-manager
+    profiles:
+      - npm
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    environment:
+      - TZ=${TZ:-Europe/Istanbul}
+    healthcheck:
+      test: ["CMD", "/usr/bin/check-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - proxy_network
+
+  #=============================================================================
+  # Nextcloud All-in-One
+  #=============================================================================
   nextcloud-aio-mastercontainer:
     image: ghcr.io/nextcloud-releases/all-in-one:latest
     container_name: nextcloud-aio-mastercontainer
     init: true
     restart: always
     ports:
-      - "8080:8080"   # AIO interface (self-signed cert)
+      - "8080:8080"
     volumes:
       - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      # Data dizini - TrueNAS NFS mount
-      # ÖNEMLİ: Bu ayar ilk kurulumdan ÖNCE belirlenmelidir!
       - NEXTCLOUD_DATADIR=${NEXTCLOUD_DATADIR:-/mnt/ncdata}
-      
-      # Host dizinlerine erişim izni
       - NEXTCLOUD_MOUNT=${NEXTCLOUD_MOUNT:-/mnt/}
-      
-      # Reverse proxy ayarları (NPM için)
       - APACHE_PORT=${APACHE_PORT:-11000}
       - APACHE_IP_BINDING=${APACHE_IP_BINDING:-0.0.0.0}
-      
-      # Trusted proxies - NPM container IP range
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-172.16.0.0/12 192.168.0.0/16 10.0.0.0/8}
-      
-      # Performans ayarları
       - NEXTCLOUD_MEMORY_LIMIT=${NEXTCLOUD_MEMORY_LIMIT:-2048M}
       - NEXTCLOUD_UPLOAD_LIMIT=${NEXTCLOUD_UPLOAD_LIMIT:-16G}
       - NEXTCLOUD_MAX_TIME=${NEXTCLOUD_MAX_TIME:-3600}
-      
-      # Timezone
       - TZ=${TZ:-Europe/Istanbul}
-      
-      # Skip domain validation (eğer gerekirse)
-      # - SKIP_DOMAIN_VALIDATION=true
     networks:
       - proxy_network
 
 volumes:
   nextcloud_aio_mastercontainer:
     name: nextcloud_aio_mastercontainer
+  npm_data:
+    name: npm_data
+  npm_letsencrypt:
+    name: npm_letsencrypt
 
 networks:
   proxy_network:
-    external: true
     name: proxy_network
-
-# Not: AIO kendi network'ünü de oluşturur (nextcloud-aio)
-# Diğer konteynerler (Collabora, PostgreSQL, Redis vb.)
-# AIO tarafından otomatik yönetilir
+    driver: bridge
