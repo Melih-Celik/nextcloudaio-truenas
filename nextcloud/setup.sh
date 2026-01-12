@@ -113,8 +113,8 @@ get_user_input() {
     done
 
     # NFS Path
-    read -p "TrueNAS NFS path [/mnt/tank/nextcloud/data]: " NFS_PATH
-    NFS_PATH=${NFS_PATH:-/mnt/tank/nextcloud/data}
+    read -p "TrueNAS NFS path [/mnt/storage/nextcloud/data]: " NFS_PATH
+    NFS_PATH=${NFS_PATH:-/mnt/storage/nextcloud/data}
 
     # Email
     while true; do
