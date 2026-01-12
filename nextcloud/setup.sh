@@ -362,7 +362,13 @@ EOF
 start_npm() {
     log_info "Nginx Proxy Manager başlatılıyor..."
 
+    # NPM'i başlat (proxy_network oluşacak)
     docker compose -f docker-compose.npm.yml up -d
+
+    # Network'ün oluştuğunu doğrula
+    if docker network ls | grep -q "proxy_network"; then
+        log_success "proxy_network oluşturuldu"
+    fi
 
     log_success "NPM başlatıldı"
     echo ""

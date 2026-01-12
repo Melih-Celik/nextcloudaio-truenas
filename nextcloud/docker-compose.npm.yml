@@ -20,6 +20,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - proxy_network
 
 volumes:
   npm_data:
@@ -28,5 +30,8 @@ volumes:
     name: npm_letsencrypt
 
 networks:
+  proxy_network:
+    name: proxy_network
+    driver: bridge
   default:
     name: npm_network

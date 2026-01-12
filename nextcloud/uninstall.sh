@@ -250,10 +250,13 @@ remove_volumes() {
 remove_networks() {
     log_info "Docker network'leri kaldırılıyor..."
     
+    # Ortak proxy network
+    docker network rm proxy_network 2>/dev/null || true
+    
     # AIO network
     docker network rm nextcloud-aio 2>/dev/null || true
     
-    # NPM network
+    # NPM network (eski)
     docker network rm npm_network 2>/dev/null || true
     
     log_success "Network'ler kaldırıldı"

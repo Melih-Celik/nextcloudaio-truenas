@@ -24,6 +24,9 @@ services:
       - APACHE_PORT=${APACHE_PORT:-11000}
       - APACHE_IP_BINDING=${APACHE_IP_BINDING:-0.0.0.0}
       
+      # Trusted proxies - NPM container IP range
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-172.16.0.0/12 192.168.0.0/16 10.0.0.0/8}
+      
       # Performans ayarları
       - NEXTCLOUD_MEMORY_LIMIT=${NEXTCLOUD_MEMORY_LIMIT:-2048M}
       - NEXTCLOUD_UPLOAD_LIMIT=${NEXTCLOUD_UPLOAD_LIMIT:-16G}
@@ -34,11 +37,18 @@ services:
       
       # Skip domain validation (eğer gerekirse)
       # - SKIP_DOMAIN_VALIDATION=true
+    networks:
+      - proxy_network
 
 volumes:
   nextcloud_aio_mastercontainer:
     name: nextcloud_aio_mastercontainer
 
-# Not: AIO kendi network'ünü oluşturur
+networks:
+  proxy_network:
+    external: true
+    name: proxy_network
+
+# Not: AIO kendi network'ünü de oluşturur (nextcloud-aio)
 # Diğer konteynerler (Collabora, PostgreSQL, Redis vb.)
 # AIO tarafından otomatik yönetilir
