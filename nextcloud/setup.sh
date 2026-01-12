@@ -2,7 +2,7 @@
 
 #===============================================================================
 # Nextcloud AIO + Nginx Proxy Manager Kurulum Script'i
-# TrueNAS NFS mount ile çalışır
+# AlmaLinux 10 için - TrueNAS NFS mount ile çalışır
 #===============================================================================
 
 set -e
@@ -12,13 +12,14 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Banner
 echo -e "${BLUE}"
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║         Nextcloud AIO + NPM Kurulum Script'i                 ║"
-echo "║              TrueNAS NFS Entegrasyonu                        ║"
+echo "║           AlmaLinux 10 - TrueNAS NFS Entegrasyonu           ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -61,8 +62,10 @@ check_os() {
         exit 1
     fi
 
-    if [[ "$OS" != "ubuntu" && "$OS" != "debian" ]]; then
-        log_warn "Bu script Ubuntu/Debian için optimize edilmiştir."
+    # AlmaLinux, Rocky, CentOS, RHEL kontrolü
+    if [[ "$OS" != "almalinux" && "$OS" != "rocky" && "$OS" != "centos" && "$OS" != "rhel" ]]; then
+        log_warn "Bu script AlmaLinux/Rocky/RHEL için optimize edilmiştir."
+        log_warn "Tespit edilen OS: $OS"
         read -p "Devam etmek istiyor musunuz? (e/h): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Ee]$ ]]; then
@@ -146,7 +149,7 @@ get_user_input() {
 
 update_system() {
     log_info "Sistem güncelleniyor..."
-    apt update && apt upgrade -y
+    dnf update -y
     log_success "Sistem güncellendi"
 }
 
@@ -156,17 +159,77 @@ update_system() {
 
 install_dependencies() {
     log_info "Gerekli paketler kuruluyor..."
-    apt install -y \
+    dnf install -y \
         curl \
         wget \
         git \
-        nfs-common \
+        nfs-utils \
         ca-certificates \
-        gnupg \
-        lsb-release \
+        gnupg2 \
         screen \
-        htop
+        htop \
+        tar \
+        dnf-plugins-core
     log_success "Paketler kuruldu"
+}
+
+#===============================================================================
+# SELinux Ayarları
+#===============================================================================
+
+configure_selinux() {
+    log_info "SELinux ayarları yapılıyor..."
+    
+    # SELinux durumunu kontrol et
+    if command -v getenforce &> /dev/null; then
+        SELINUX_STATUS=$(getenforce)
+        log_info "SELinux durumu: $SELINUX_STATUS"
+        
+        if [[ "$SELINUX_STATUS" == "Enforcing" ]]; then
+            # NFS için SELinux boolean ayarları
+            setsebool -P container_use_nfs on 2>/dev/null || true
+            setsebool -P virt_use_nfs on 2>/dev/null || true
+            
+            # Container için SELinux ayarları
+            setsebool -P container_manage_cgroup on 2>/dev/null || true
+            
+            log_success "SELinux boolean ayarları yapıldı"
+        fi
+    fi
+}
+
+#===============================================================================
+# Firewall Ayarları
+#===============================================================================
+
+configure_firewall() {
+    log_info "Firewall ayarları yapılıyor..."
+    
+    if systemctl is-active --quiet firewalld; then
+        # HTTP/HTTPS
+        firewall-cmd --permanent --add-service=http
+        firewall-cmd --permanent --add-service=https
+        
+        # NPM Admin
+        firewall-cmd --permanent --add-port=81/tcp
+        
+        # AIO Interface
+        firewall-cmd --permanent --add-port=8080/tcp
+        firewall-cmd --permanent --add-port=8443/tcp
+        
+        # Nextcloud Apache (internal)
+        firewall-cmd --permanent --add-port=11000/tcp
+        
+        # NFS client
+        firewall-cmd --permanent --add-service=nfs
+        
+        # Reload
+        firewall-cmd --reload
+        
+        log_success "Firewall kuralları eklendi"
+    else
+        log_warn "firewalld çalışmıyor, firewall ayarları atlandı"
+    fi
 }
 
 #===============================================================================
@@ -182,19 +245,23 @@ install_docker() {
 
     log_info "Docker kuruluyor..."
 
-    # Docker GPG key
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
+    # Eski versiyonları kaldır
+    dnf remove -y docker \
+        docker-client \
+        docker-client-latest \
+        docker-common \
+        docker-latest \
+        docker-latest-logrotate \
+        docker-logrotate \
+        docker-engine \
+        podman \
+        runc 2>/dev/null || true
 
-    # Docker repo
-    echo \
-        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$OS \
-        $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    # Docker repo ekle (CentOS repo AlmaLinux için çalışır)
+    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
     # Docker kurulum
-    apt update
-    apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
     # Docker servisini başlat
     systemctl enable docker
@@ -213,6 +280,10 @@ setup_nfs_mount() {
 
     # Mount noktası oluştur
     mkdir -p /mnt/ncdata
+
+    # NFS servisleri
+    systemctl enable nfs-client.target
+    systemctl start nfs-client.target
 
     # Önce test et
     log_info "NFS bağlantısı test ediliyor..."
@@ -256,6 +327,7 @@ create_env_file() {
     cat > .env << EOF
 # Nextcloud AIO Yapılandırma
 # Oluşturulma: $(date)
+# OS: AlmaLinux 10
 
 # Domain ayarları
 DOMAIN=${DOMAIN}
@@ -359,6 +431,9 @@ print_post_install() {
     echo "5. ${YELLOW}Data taşındıktan sonra:${NC}"
     echo "   ./scan.sh"
     echo ""
+    echo -e "${RED}Sistemi kaldırmak için:${NC}"
+    echo "   ./uninstall.sh"
+    echo ""
     echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
 }
@@ -373,6 +448,8 @@ main() {
     get_user_input
     update_system
     install_dependencies
+    configure_selinux
+    configure_firewall
     install_docker
     setup_nfs_mount
     create_env_file

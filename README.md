@@ -11,7 +11,7 @@ Bu repo, TrueNAS VM üzerinde depolama ve ayrı bir VM'de Nextcloud AIO + Nginx 
                            │ Port 443 (HTTPS)
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Nextcloud VM (Ubuntu/Debian)                    │
+│              Nextcloud VM (AlmaLinux 10)                     │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │         Nginx Proxy Manager (Docker)                 │    │
 │  │         - SSL Termination (Let's Encrypt)            │    │
@@ -64,8 +64,11 @@ git clone https://github.com/KULLANICI/nextcloudaio-truenas.git
 cd nextcloudaio-truenas/nextcloud
 
 # Kurulum script'ini çalıştır
-chmod +x setup.sh
+chmod +x *.sh
 ./setup.sh
+
+# Kaldırmak için (opsiyonel)
+./uninstall.sh
 ```
 
 Script sizden şu bilgileri isteyecek:
@@ -139,6 +142,7 @@ nextcloudaio-truenas/
 │   └── README.md               # TrueNAS kurulum rehberi
 └── nextcloud/
     ├── setup.sh                # Ana interaktif kurulum script'i
+    ├── uninstall.sh            # Kaldırma script'i
     ├── docker-compose.npm.yml  # Nginx Proxy Manager
     ├── docker-compose.yml      # Nextcloud AIO
     ├── .env.example            # Environment değişkenleri şablonu

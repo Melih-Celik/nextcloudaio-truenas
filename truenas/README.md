@@ -173,8 +173,8 @@ TrueNAS otomatik scrub zamanlar ama kontrol edin:
 ## 🧪 Test Mount (Nextcloud VM'den)
 
 ```bash
-# NFS utils kur
-sudo apt install nfs-common -y
+# NFS utils kur (AlmaLinux)
+sudo dnf install nfs-utils -y
 
 # Test mount
 sudo mkdir -p /mnt/ncdata
