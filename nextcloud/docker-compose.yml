@@ -1,0 +1,44 @@
+# Nextcloud All-in-One Docker Compose
+# Resmi AIO kurulumu - https://github.com/nextcloud/all-in-one
+
+services:
+  nextcloud-aio-mastercontainer:
+    image: ghcr.io/nextcloud-releases/all-in-one:latest
+    container_name: nextcloud-aio-mastercontainer
+    init: true
+    restart: always
+    ports:
+      - "8080:8080"   # AIO interface (self-signed cert)
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Data dizini - TrueNAS NFS mount
+      # ÖNEMLİ: Bu ayar ilk kurulumdan ÖNCE belirlenmelidir!
+      - NEXTCLOUD_DATADIR=${NEXTCLOUD_DATADIR:-/mnt/ncdata}
+      
+      # Host dizinlerine erişim izni
+      - NEXTCLOUD_MOUNT=${NEXTCLOUD_MOUNT:-/mnt/}
+      
+      # Reverse proxy ayarları (NPM için)
+      - APACHE_PORT=${APACHE_PORT:-11000}
+      - APACHE_IP_BINDING=${APACHE_IP_BINDING:-0.0.0.0}
+      
+      # Performans ayarları
+      - NEXTCLOUD_MEMORY_LIMIT=${NEXTCLOUD_MEMORY_LIMIT:-2048M}
+      - NEXTCLOUD_UPLOAD_LIMIT=${NEXTCLOUD_UPLOAD_LIMIT:-16G}
+      - NEXTCLOUD_MAX_TIME=${NEXTCLOUD_MAX_TIME:-3600}
+      
+      # Timezone
+      - TZ=${TZ:-Europe/Istanbul}
+      
+      # Skip domain validation (eğer gerekirse)
+      # - SKIP_DOMAIN_VALIDATION=true
+
+volumes:
+  nextcloud_aio_mastercontainer:
+    name: nextcloud_aio_mastercontainer
+
+# Not: AIO kendi network'ünü oluşturur
+# Diğer konteynerler (Collabora, PostgreSQL, Redis vb.)
+# AIO tarafından otomatik yönetilir
