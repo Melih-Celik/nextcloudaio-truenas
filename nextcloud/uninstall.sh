@@ -338,13 +338,11 @@ unmount_nfs() {
             read -p "> " CONFIRM_DELETE
             
             if [[ "$CONFIRM_DELETE" == "TÜM VERİLERİ SİL" ]]; then
-                log_warn "Veriler siliniyor..."
+                log_warn "Veriler siliniyor (NFS üzerinden)..."
                 
-                # Önce NFS'i unmount et
-                umount /mnt/ncdata 2>/dev/null || true
-                
-                # Sonra dizini temizle (local olarak kalan varsa)
+                # ÖNCE mount'lu iken sil (NFS üzerindeki dosyalar silinir)
                 rm -rf /mnt/ncdata/* 2>/dev/null || true
+                rm -rf /mnt/ncdata/.* 2>/dev/null || true
                 
                 log_success "Veriler silindi"
                 DATA_DELETED=true
