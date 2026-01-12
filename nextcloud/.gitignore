@@ -1,0 +1,20 @@
+# Environment dosyası (kurulumda oluşur)
+.env
+
+# Log ve PID dosyaları
+*.log
+*.pid
+scan.log
+scan.pid
+
+# Geçici dosyalar
+*.tmp
+*.bak
+*~
+
+# macOS
+.DS_Store
+
+# Linux
+*.swp
+*.swo
