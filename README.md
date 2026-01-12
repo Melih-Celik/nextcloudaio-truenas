@@ -90,7 +90,7 @@ Script soracak:
 ## Belgeler
 
 - [TrueNAS Kurulum Detayları](truenas/README.md)
-- [Windows'tan Veri Taşıma](docs/windows-veri-tasima.md)
+- [LDAP + Veri Taşıma Rehberi](docs/ldap-veri-tasima.md)
 
 ---
 
