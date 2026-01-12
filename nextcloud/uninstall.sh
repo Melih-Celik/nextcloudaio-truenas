@@ -340,12 +340,44 @@ unmount_nfs() {
             if [[ "$CONFIRM_DELETE" == "TÜM VERİLERİ SİL" ]]; then
                 log_warn "Veriler siliniyor (NFS üzerinden)..."
                 
-                # ÖNCE mount'lu iken sil (NFS üzerindeki dosyalar silinir)
-                rm -rf /mnt/ncdata/* 2>/dev/null || true
-                rm -rf /mnt/ncdata/.* 2>/dev/null || true
+                # NFS üzerinden silmeyi dene
+                rm -rf /mnt/ncdata/* 2>/dev/null
+                rm -rf /mnt/ncdata/.* 2>/dev/null
                 
-                log_success "Veriler silindi"
-                DATA_DELETED=true
+                # Silme başarılı mı kontrol et
+                REMAINING=$(ls -A /mnt/ncdata 2>/dev/null | wc -l)
+                if [[ "$REMAINING" -gt 0 ]]; then
+                    echo ""
+                    log_error "NFS üzerinden silme başarısız! (İzin sorunu)"
+                    echo ""
+                    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+                    echo -e "${YELLOW}  TrueNAS'tan manuel silmeniz gerekiyor:${NC}"
+                    echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+                    echo ""
+                    # .env'den NFS path'i oku
+                    if [[ -f "$SCRIPT_DIR/.env" ]]; then
+                        NFS_PATH=$(grep "^NFS_PATH=" "$SCRIPT_DIR/.env" | cut -d'=' -f2)
+                        NFS_SERVER=$(grep "^NFS_SERVER=" "$SCRIPT_DIR/.env" | cut -d'=' -f2)
+                        echo -e "  1. TrueNAS Web UI'a git: ${CYAN}http://${NFS_SERVER}${NC}"
+                        echo -e "  2. Storage → Datasets → ${CYAN}${NFS_PATH}${NC}"
+                        echo -e "  3. İçindeki tüm dosya/klasörleri sil"
+                        echo ""
+                        echo -e "  Veya TrueNAS Shell'den:"
+                        echo -e "  ${CYAN}rm -rf ${NFS_PATH}/*${NC}"
+                        echo -e "  ${CYAN}rm -rf ${NFS_PATH}/.*${NC}"
+                    else
+                        echo -e "  1. TrueNAS Web UI → Storage → Datasets"
+                        echo -e "  2. Nextcloud data klasörünü bul"
+                        echo -e "  3. İçindeki tüm dosya/klasörleri sil"
+                    fi
+                    echo ""
+                    echo -e "${YELLOW}Sildikten sonra tekrar ./setup.sh çalıştırın${NC}"
+                    echo ""
+                    DATA_DELETED=false
+                else
+                    log_success "Veriler silindi"
+                    DATA_DELETED=true
+                fi
             else
                 log_warn "Yanlış giriş - veriler KORUNDU"
                 DATA_DELETED=false
