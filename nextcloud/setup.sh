@@ -180,8 +180,6 @@ install_dependencies() {
         nfs-utils \
         ca-certificates \
         gnupg2 \
-        screen \
-        htop \
         tar \
         dnf-plugins-core
     log_success "Paketler kuruldu"
