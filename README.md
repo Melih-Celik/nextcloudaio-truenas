@@ -2,21 +2,29 @@
 
 ## VM Gereksinimleri
 
-### TrueNAS VM
-| Özellik | Değer |
-|---------|-------|
-| CPU | 4 vCPU |
-| RAM | 16GB (ZFS için) |
-| OS Disk | 32GB |
-| Data Disk | İhtiyaca göre (RAID-Z2) |
+### TrueNAS VM (100TB için)
+| Özellik | Değer | Açıklama |
+|---------|-------|----------|
+| CPU | 4-6 vCPU | ZFS ve NFS için |
+| RAM | 32GB | ZFS: 1GB per 1TB data (16GB min + ZIL için 16GB) |
+| OS Disk | 32GB | Boot pool |
+| Data Disk | 10x12TB HDD | 120TB raw = ~96TB kullanılabilir (Stripe) |
+| SLOG (opsiyonel) | 2x 32GB SSD | NFS yazma performansı (mirror) |
 
-### Nextcloud VM
-| Özellik | Değer |
-|---------|-------|
-| CPU | 4 vCPU |
-| RAM | 8GB |
-| Disk | 50GB |
-| OS | AlmaLinux 10 |
+> 💡 **RAM Hesabı:** 100TB × 0.15GB = 15GB (min) + 16GB (sistem/ZIL) = 32GB
+
+### Nextcloud VM (100TB için)
+| Özellik | Değer | Açıklama |
+|---------|-------|----------|
+| CPU | 6-8 vCPU | Dosya tarama ve önizleme işlemleri için |
+| RAM | 16GB | Docker + PostgreSQL + Redis + Nextcloud |
+| Disk | 150GB | OS (50GB) + Docker (30GB) + DB (70GB) |
+| OS | AlmaLinux 10 | |
+
+> 💡 **DB Boyutu:** 100TB Nextcloud taraması = ~50-70GB PostgreSQL veritabanı
+> - Her dosya: ~2KB metadata
+> - 50 milyon dosya ≈ 100GB DB
+> - Tahmini ortalama: 2MB/dosya → 50M dosya → 50-70GB DB
 
 ---
 
